@@ -6,20 +6,20 @@ import { sendMail } from '../../../lib/mailer';
 import authMiddleware from '../../../lib/authMiddleware';
 
 
-const corsMiddleware = Cors({
+const cors = Cors({
   methods: ['GET', 'POST'],
-  origin: '*',
+  origin: '*', 
 });
 
-
 async function handler(req, res) {
-  await runMiddleware(req, res, corsMiddleware); 
+  // Run CORS first
+  await runMiddleware(req, res, cors);
+
   await connectToDatabase();
 
   if (req.method === 'POST') {
     try {
       const { title, description, category, priority } = req.body;
-      console.log("Incoming data:", req.body);
 
       if (!title || !description || !category || !priority) {
         return res.status(400).json({ error: 'All fields are required' });
@@ -54,14 +54,16 @@ async function handler(req, res) {
   }
 
   if (req.method === 'GET') {
-    
-    if (req.user.role !== 'admin') {
-      return res.status(403).json({ message: 'Forbidden: Admins only' });
-    }
-
     try {
-      const complaints = await Complaint.find().sort({ dateSubmitted: -1 });
-      return res.status(200).json(complaints);
+  
+      await authMiddleware(req, res, async () => {
+        if (req.user.role !== 'admin') {
+          return res.status(403).json({ message: 'Forbidden: Admins only' });
+        }
+
+        const complaints = await Complaint.find().sort({ dateSubmitted: -1 });
+        return res.status(200).json(complaints);
+      });
     } catch (error) {
       console.error('GET error:', error);
       return res.status(500).json({ error: 'Internal Server Error' });
@@ -71,4 +73,4 @@ async function handler(req, res) {
   return res.status(405).json({ error: 'Method not allowed' });
 }
 
-export default authMiddleware(handler);
+export default handler;
